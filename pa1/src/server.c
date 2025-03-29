@@ -375,6 +375,141 @@ void s_refresh(int requesting_client_fd) {
     h_send_com(requesting_client_fd, clientListString);
 }
 
+// handling send request from server side
+void s_send(char client_ip[], char msg[], int requesting_client_fd) {
 
+    char receive[MSIZE * 4];
+    struct host * temp = clients;
+    struct host * from_client = malloc(sizeof(struct host)), * to_client = malloc(sizeof(struct host));;
+    while (temp != NULL) {
+        if (strstr(client_ip, temp -> ip_addr) != NULL) {
+            to_client = temp;
+        }
+        if (requesting_client_fd == temp -> fd) {
+            from_client = temp;
+        }
+        temp = temp -> next_host;
+    }
+    // if (to_client == NULL || from_client == NULL) {
+    //     // TODO: CHECK IF THIS IS REQUIRED
+    //     cse4589_print_and_log("[RELAYED:ERROR]\n");
+    //     cse4589_print_and_log("[RELAYED:END]\n");
+
+    //     return;
+    // }
+
+    from_client -> num_msg_sent++;
+    // if client is blocked by the server or other client
+
+    bool is_blocked = false;
+
+    temp = to_client -> blocked;
+    while (temp != NULL) {
+        if (strstr(from_client -> ip_addr, temp -> ip_addr) != NULL) {
+            is_blocked = true;
+            break;
+        }
+        temp = temp -> next_host;
+    }
+    h_send_com(from_client -> fd, "SUCCESSSEND\n");
+    if (is_blocked) {
+        cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+        cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", from_client -> ip_addr, to_client -> ip_addr, msg);
+        cse4589_print_and_log("[RELAYED:END]\n");
+        h_send_com(from_client -> fd, "SUCCESSSEND\n");
+        return;
+    }
+
+    if (to_client -> is_logged_in) {
+        to_client -> num_msg_rcv++;
+        sprintf(receive, "RECEIVE %s %s\n", from_client -> ip_addr, msg);
+        h_send_com(to_client -> fd, receive);
+
+        // // TODO: CHECK IF THIS NEEDS TO BE SENT WHEN BLOCKED
+        // cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+        // cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", from_client -> ip_addr, to_client -> ip_addr, msg);
+        // cse4589_print_and_log("[RELAYED:END]\n");
+    } else {
+        struct message * new_message = malloc(sizeof(struct message));
+        memcpy(new_message -> text, msg, sizeof(new_message -> text));
+        new_message -> from_client = from_client;
+        new_message -> is_broadcast = false;
+        if (to_client -> queued_messages == NULL) {
+            to_client -> queued_messages = new_message;
+        } else {
+            struct message * temp_message = to_client -> queued_messages;
+            while (temp_message -> next_message != NULL) {
+                temp_message = temp_message -> next_message;
+            }
+            temp_message -> next_message = new_message;
+        }
+    }
+
+}
+
+// Handling broadcast request from client on server side
+void s_broadcast(char msg[], int requesting_client_fd) {
+    struct host * temp = clients;
+    struct host * from_client = malloc(sizeof(struct host));
+    while (temp != NULL) {
+        if (requesting_client_fd == temp -> fd) {
+            from_client = temp;
+        }
+        temp = temp -> next_host;
+    }
+    struct host * to_client = clients;
+    int id = 1;
+    from_client -> num_msg_sent++;
+    while (to_client != NULL) {
+        if (to_client -> fd == requesting_client_fd) {
+            to_client = to_client -> next_host;
+            continue;
+        }
+
+        bool is_blocked = false;
+
+        struct host * temp_blocked = to_client -> blocked;
+        while (temp_blocked != NULL) {
+            if (temp_blocked -> fd == requesting_client_fd) {
+                is_blocked = true;
+                break;
+            }
+            temp_blocked = temp_blocked -> next_host;
+        }
+
+        if (is_blocked) {
+            to_client = to_client -> next_host;
+            continue;
+        }
+
+        char receive[MSIZE * 4];
+
+        if (to_client -> is_logged_in) {
+            to_client -> num_msg_rcv++;
+            sprintf(receive, "RECEIVE %s %s\n", from_client -> ip_addr, msg);
+            h_send_com(to_client -> fd, receive);
+        } else {
+            struct message * new_message = malloc(sizeof(struct message));
+            memcpy(new_message -> text, msg, sizeof(new_message -> text));
+            new_message -> from_client = from_client;
+            new_message -> is_broadcast = true;
+            if (to_client -> queued_messages == NULL) {
+                to_client -> queued_messages = new_message;
+            } else {
+                struct message * temp_message = to_client -> queued_messages;
+                while (temp_message -> next_message != NULL) {
+                    temp_message = temp_message -> next_message;
+                }
+                temp_message -> next_message = new_message;
+            }
+        }
+        to_client = to_client -> next_host;
+    }
+
+    cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+    cse4589_print_and_log("msg from:%s, to:255.255.255.255\n[msg]:%s\n", from_client -> ip_addr, msg);
+    cse4589_print_and_log("[RELAYED:END]\n");
+    h_send_com(from_client -> fd, "SUCCESSBROADCAST\n");
+}
 
 

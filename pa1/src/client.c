@@ -516,3 +516,112 @@ void c_refresh_list(char clientListString[]) {
     }
 }
 
+// handling send request from client side
+void c_send(char command[]) {
+    char client_ip[MSIZE];
+    int cmdi = 5;
+    int ipi = 0;
+    while (command[cmdi] != ' ') {
+        client_ip[ipi] = command[cmdi];
+        cmdi += 1;
+        ipi += 1;
+    }
+    client_ip[ipi] = '\0';
+    if (!h_valid_ip(client_ip)) {
+        cse4589_print_and_log("[SEND:ERROR]\n");
+        cse4589_print_and_log("[SEND:END]\n");
+        return;
+    }
+    struct host * temp = clients;
+    while (temp != NULL) {
+        if (strstr(temp -> ip_addr, client_ip) != NULL) {
+            h_send_com(server -> fd, command);
+            break;
+        }
+        temp = temp -> next_host;
+    }
+    if (temp == NULL) {
+        cse4589_print_and_log("[SEND:ERROR]\n");
+        cse4589_print_and_log("[SEND:END]\n");
+    }
+}
+
+// Handling command if message received from other client
+void c_receive(char client_ip[], char msg[]) {
+    cse4589_print_and_log("[RECEIVED:SUCCESS]\n");
+    cse4589_print_and_log("msg from:%s\n[msg]:%s\n", client_ip, msg);
+    cse4589_print_and_log("[RECEIVED:END]\n");
+}
+
+// Handling the block or unblock request from the client side
+void c_block_unblock(char command[], bool is_a_block) {
+    char client_ip[MSIZE];
+    if (is_a_block) {
+        sscanf(command, "BLOCK %s\n", client_ip);
+    } else {
+        sscanf(command, "UNBLOCK %s\n", client_ip);
+    }
+
+    // if present in the list
+    struct host * temp = clients;
+    while (temp != NULL) {
+        if (strstr(client_ip, temp -> ip_addr) != NULL) {
+            break;
+        }
+        temp = temp -> next_host;
+    }
+    struct host * blocked_client = temp;
+
+    // check if already blocked, then no need to block
+    temp = localhost -> blocked;
+    while (temp != NULL) {
+        if (strstr(client_ip, temp -> ip_addr) != NULL) {
+            break;
+        }
+        temp = temp -> next_host;
+    }
+    struct host * blocked_client_2 = temp;
+
+    if (blocked_client != NULL && blocked_client_2 == NULL && is_a_block) {
+        struct host * new_blocked_client = malloc(sizeof(struct host));
+        memcpy(new_blocked_client -> ip_addr, blocked_client -> ip_addr, sizeof(new_blocked_client -> ip_addr));
+        memcpy(new_blocked_client -> port_num, blocked_client -> port_num, sizeof(new_blocked_client -> port_num));
+        memcpy(new_blocked_client -> hostname, blocked_client -> hostname, sizeof(new_blocked_client -> hostname));
+        new_blocked_client -> fd = blocked_client -> fd;
+        new_blocked_client -> next_host = NULL;
+        if (localhost -> blocked != NULL) {
+            struct host * temp_blocked = localhost -> blocked;
+            while (temp_blocked -> next_host != NULL) {
+                temp_blocked = temp_blocked -> next_host;
+            }
+            temp_blocked -> next_host = new_blocked_client;
+        } else {
+            localhost -> blocked = new_blocked_client;
+        }
+        h_send_com(server -> fd, command);
+    } else if (blocked_client != NULL && blocked_client_2 != NULL && !is_a_block) {
+        struct host * temp_blocked = localhost -> blocked;
+        if (strstr(blocked_client -> ip_addr, temp_blocked -> ip_addr) != NULL) {
+            localhost -> blocked = localhost -> blocked -> next_host;
+        } else {
+            struct host * previous = temp_blocked;
+            while (temp_blocked != NULL) {
+                if (strstr(temp_blocked -> ip_addr, blocked_client -> ip_addr) != NULL) {
+                    previous -> next_host = temp_blocked -> next_host;
+                    break;
+                }
+                temp_blocked = temp_blocked -> next_host;
+            }
+        }
+        h_send_com(server -> fd, command);
+
+    } else {
+        if (is_a_block) {
+            cse4589_print_and_log("[BLOCK:ERROR]\n");
+            cse4589_print_and_log("[BLOCK:END]\n");
+        } else {
+            cse4589_print_and_log("[UNBLOCK:ERROR]\n");
+            cse4589_print_and_log("[UNBLOCK:END]\n");
+        }
+    }
+}
