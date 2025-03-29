@@ -222,7 +222,7 @@ void c_exec_comm(char command[]) {
         if (localhost -> is_logged_in) {
             char peer_ip[MSIZE], file_name[MSIZE];
             sscanf(command, "SENDFILE %s %s\n", peer_ip, file_name);
-            c_p2p_file_transfer(peer_ip, file_name);
+            // c_p2p_file_transfer(peer_ip, file_name);
         } else {
             cse4589_print_and_log("[SENDFILE:ERROR]\n");
             cse4589_print_and_log("[SENDFILE:END]\n");
@@ -447,7 +447,7 @@ void c_login(char server_ip[], char server_port[]) {
 
                     int new_peer_fd = accept(fd, (struct sockaddr * ) & new_peer_addr, & addrlen);
                     if (new_peer_fd != -1) {
-                        c_recv_file_frm_peer(new_peer_fd);
+                        // c_recv_file_frm_peer(new_peer_fd);
                     }
                 }
             }
