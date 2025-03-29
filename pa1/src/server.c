@@ -359,5 +359,22 @@ void h_login(char client_ip[], char client_port[], char client_hostname[], int r
     requesting_client -> queued_messages = temp_message;
 }
 
+// refresh request from client side, handling frm server side
+void s_refresh(int requesting_client_fd) {
+    char clientListString[MSIZEBACK] = "REFRESHRESPONSE NOTFIRST\n";
+    struct host * temp = clients;
+    while (temp != NULL) {
+        if (temp -> is_logged_in) {
+            char clientString[MSIZE * 4];
+            sprintf(clientString, "%s %s %s\n", temp -> ip_addr, temp -> port_num, temp -> hostname);
+            strcat(clientListString, clientString);
+        }
+        temp = temp -> next_host;
+    }
+    strcat(clientListString, "ENDREFRESH\n");
+    h_send_com(requesting_client_fd, clientListString);
+}
+
+
 
 

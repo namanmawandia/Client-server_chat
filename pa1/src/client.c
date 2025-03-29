@@ -366,3 +366,153 @@ int c_connect_s(char server_ip[], char server_port[]) {
 
     return 1;
 }
+
+// client login to server
+void c_login(char server_ip[], char server_port[]) {
+
+    // register the client to server to store its information
+    if (server_ip == NULL || server_port == NULL) {
+        cse4589_print_and_log("[LOGIN:ERROR]\n");
+        cse4589_print_and_log("[LOGIN:END]\n");
+        return;
+    }
+    if (server == NULL) {
+        if (!h_valid_ip(server_ip) || c_connect_s(server_ip, server_port) == 0) {
+            cse4589_print_and_log("[LOGIN:ERROR]\n");
+            cse4589_print_and_log("[LOGIN:END]\n");
+            return;
+        }
+    } else {
+        if (strstr(server -> ip_addr, server_ip) == NULL || strstr(server -> port_num, server_port) == NULL) {
+            cse4589_print_and_log("[LOGIN:ERROR]\n");
+            cse4589_print_and_log("[LOGIN:END]\n");
+            return;
+        }
+    }
+
+    // client send a info msg to server, containg its all the information
+    localhost -> is_logged_in = true;
+
+    char msg[MSIZE * 4];
+    sprintf(msg, "LOGIN %s %s %s\n", localhost -> ip_addr, localhost -> port_num, localhost -> hostname);
+    h_send_com(server -> fd, msg);
+
+    // add server fd to master list
+    fd_set master; 
+    fd_set read_fds; 
+    FD_ZERO( & master);
+    FD_ZERO( & read_fds);
+    FD_SET(server -> fd, & master); // server_fd added to master list
+    FD_SET(STDIN, & master); 
+    FD_SET(localhost -> fd, & master);
+    int fdmax = server -> fd > STDIN ? server -> fd : STDIN;    
+    fdmax = fdmax > localhost -> fd ? fdmax : localhost -> fd;
+    
+    char data_buffer[MSIZEBACK]; 
+    int data_buffer_bytes;
+    int fd;
+    struct sockaddr_storage new_peer_addr; // client address
+    socklen_t addrlen = sizeof new_peer_addr;
+
+    // main loop
+    while (localhost -> is_logged_in) {
+        read_fds = master; // make a copy of master set
+        if (select(fdmax + 1, & read_fds, NULL, NULL, NULL) == -1) {
+            exit(EXIT_FAILURE);
+        }
+
+        for (fd = 0; fd <= fdmax; fd++) {
+            if (FD_ISSET(fd, & read_fds)) {
+
+                if (fd == server -> fd) {
+                    // server data
+                    data_buffer_bytes = recv(fd, data_buffer, sizeof data_buffer, 0);
+                    if (data_buffer_bytes == 0) {
+                        close(fd); // Close
+                        FD_CLR(fd, & master); // fd removed from master list
+                    } else if (data_buffer_bytes == -1) {
+                        close(fd); // Close
+                        FD_CLR(fd, & master); // fd removed from master list
+                    } else {
+                        execute_command(data_buffer, fd);
+                    }
+                } else if (fd == STDIN) {
+                    // data from standard input
+                    char * command = (char * ) malloc(sizeof(char) * MSIZEBACK);
+                    memset(command, '\0', MSIZEBACK);
+                    if (fgets(command, MSIZEBACK - 1, stdin) != NULL) {
+                        execute_command(command, STDIN);
+                    }
+                } else if (fd == localhost -> fd) {
+
+                    int new_peer_fd = accept(fd, (struct sockaddr * ) & new_peer_addr, & addrlen);
+                    if (new_peer_fd != -1) {
+                        c_recv_file_frm_peer(new_peer_fd);
+                    }
+                }
+            }
+        }
+
+        fflush(stdout);
+    }
+
+    return;
+
+}
+
+// refresh command
+void c_refresh_list(char clientListString[]) {
+    char * received = strstr(clientListString, "RECEIVE");
+    int rcvi = received - clientListString, cmdi = 0;
+    char command[MSIZE];
+    int blank_count = 0;
+    while (received != NULL && rcvi < strlen(clientListString)) {
+        if (clientListString[rcvi] == ' ')
+            blank_count++;
+        else
+            blank_count = 0;
+        command[cmdi] = clientListString[rcvi];
+        if (blank_count == 4) {
+            command[cmdi - 3] = '\0';
+            strcat(command, "\n");
+            c_exec_comm(command);
+            cmdi = -1;
+        }
+        cmdi++;
+        rcvi++;
+    }
+    bool is_refresh = false;
+    clients = malloc(sizeof(struct host));
+    struct host * head = clients;
+    const char delimmiter[2] = "\n";
+    char * token = strtok(clientListString, delimmiter);
+    if (strstr(token, "NOTFIRST")) {
+        is_refresh = true;
+    }
+    if (token != NULL) {
+        token = strtok(NULL, delimmiter);
+        char client_ip[MSIZE], client_port[MSIZE], client_hostname[MSIZE];
+        while (token != NULL) {
+            if (strstr(token, "ENDREFRESH") != NULL) {
+                break;
+            }
+            struct host * new_client = malloc(sizeof(struct host));
+            sscanf(token, "%s %s %s\n", client_ip, client_port, client_hostname);
+            token = strtok(NULL, delimmiter);
+            memcpy(new_client -> port_num, client_port, sizeof(new_client -> port_num));
+            memcpy(new_client -> ip_addr, client_ip, sizeof(new_client -> ip_addr));
+            memcpy(new_client -> hostname, client_hostname, sizeof(new_client -> hostname));
+            new_client -> is_logged_in = true;
+            clients -> next_host = new_client;
+            clients = clients -> next_host;
+        }
+        clients = head -> next_host;
+    }
+    if (is_refresh) {
+        cse4589_print_and_log("[REFRESH:SUCCESS]\n");
+        cse4589_print_and_log("[REFRESH:END]\n");
+    } else {
+        c_exec_comm("SUCCESSLOGIN");
+    }
+}
+
