@@ -610,4 +610,52 @@ void s_blocked(char blocker_ip_addr[]) {
     cse4589_print_and_log("[BLOCKED:END]\n");
 }
 
+// Logout command for logging out from connection
+void s_logout(int requesting_client_fd) {
+    struct host * temp = clients;
+    while (temp != NULL) {
+        if (temp -> fd == requesting_client_fd) {
+            h_send_com(requesting_client_fd, "SUCCESSLOGOUT\n");
+            temp -> is_logged_in = false;
+            break;
+        }
+        temp = temp -> next_host;
+    }
+    if (temp == NULL) {
+        h_send_com(requesting_client_fd, "ERRORLOGOUT\n");
+    }
+}
+
+// handling exit command for exiting the interface
+void s_exit(int requesting_client_fd) {
+    struct host * temp = clients;
+    if (temp -> fd == requesting_client_fd) {
+        clients = clients -> next_host;
+    } else {
+        struct host * previous = temp;
+        while (temp != NULL) {
+            if (temp -> fd == requesting_client_fd) {
+                previous -> next_host = temp -> next_host;
+                temp = temp -> next_host;
+                break;
+            }
+            temp = temp -> next_host;
+        }
+    }
+}
+
+// Statistics command to print the stats of number of message sent and received
+void s_stats() {
+    cse4589_print_and_log("[STATISTICS:SUCCESS]\n");
+
+    struct host * temp = clients;
+    int id = 1;
+    while (temp != NULL) {
+        cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n", id, temp -> hostname, temp -> num_msg_sent, temp -> num_msg_rcv, temp -> is_logged_in ? "logged-in" : "logged-out");
+        id = id + 1;
+        temp = temp -> next_host;
+    }
+
+    cse4589_print_and_log("[STATISTICS:END]\n");
+}
 
