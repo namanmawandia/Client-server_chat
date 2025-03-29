@@ -118,7 +118,7 @@ void server__init() {
         if (listener < 0) {
             continue;
         }
-        // setsockopt(listener, SOL_SOCKET, SO_REUSEPORT, & yes, sizeof(int));
+        setsockopt(listener, SOL_SOCKET, SO_REUSEPORT, & yes, sizeof(int));
         setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, & yes, sizeof(int));
         if (bind(listener, temp_ai -> ai_addr, temp_ai -> ai_addrlen) < 0) {
             close(listener);
@@ -142,21 +142,21 @@ void server__init() {
 
     freeaddrinfo(localhost_ai);
 
-    // Now we have a listener_fd. We add it to he master list of fds along with stdin.
     fd_set master; // master file descriptor list
-    fd_set read_fds; // temp file descriptor list for select()
-    FD_ZERO( & master); // clear the master and temp sets
+    fd_set read_fds; // temporary file descriptor list
+    FD_ZERO( & master); // initialize all the list to zero or clear old values
     FD_ZERO( & read_fds);
-    FD_SET(listener, & master); // Add listener to the master list
-    FD_SET(STDIN, & master); // Add STDIN to the master list
-    int fdmax = listener > STDIN ? listener : STDIN; // maximum file descriptor number. initialised to listener    
-    // variable initialisations
-    int new_client_fd; // newly accept()ed socket descriptor
+    FD_SET(listener, & master); // listener added to master
+    FD_SET(STDIN, & master); // STDIN is also added to list, so that commands from user input is considered
+    int fdmax = listener > STDIN ? listener : STDIN;    
+    
+    //Initilization
+    int new_client_fd; // newly socket descriptor
     struct sockaddr_storage new_client_addr; // client address
-    socklen_t addrlen; // address length
+    socklen_t addrlen; 
     char data_buffer[MSIZEBACK]; // buffer for client data
-    int data_buffer_bytes; // holds number of bytes received and stored in data_buffer
-    char newClientIP[INET6_ADDRSTRLEN]; // holds the ip of the new client
+    int data_buffer_bytes; 
+    char newClientIP[INET6_ADDRSTRLEN]; // ip of the new client
     int fd;
 
     // main loop
@@ -166,27 +166,23 @@ void server__init() {
             exit(EXIT_FAILURE);
         }
 
-        // run through the existing connections looking for data to read
         for (fd = 0; fd <= fdmax; fd++) {
             if (FD_ISSET(fd, & read_fds)) {
-                // if fd == listener, a new connection has come in.
                 if (fd == listener) {
                     addrlen = sizeof new_client_addr;
                     new_client_fd = accept(listener, (struct sockaddr * ) & new_client_addr, & addrlen);
 
                     if (new_client_fd != -1) {
-                        // We register the new client onto our system here.
-                        // We store the new client details here. We will assign the values later when the 
-                        // client sends more information about itself like the hostname
+                        // new client to be added
                         new_client = malloc(sizeof(struct host));
-                        FD_SET(new_client_fd, & master); // add to master set
-                        if (new_client_fd > fdmax) { // keep track of the max
+                        FD_SET(new_client_fd, & master); 
+                        if (new_client_fd > fdmax) { 
                             fdmax = new_client_fd;
                         }
                         memcpy(new_client -> ip_addr,
                             inet_ntop(
                                 new_client_addr.ss_family,
-                                host__get_in_addr((struct sockaddr * ) & new_client_addr), // even though new_client_addr is of type sockaddr_storage, they can be cast into each other. Refer beej docs.
+                                host__get_in_addr((struct sockaddr * ) & new_client_addr), 
                                 newClientIP,
                                 INET6_ADDRSTRLEN
                             ), sizeof(new_client -> ip_addr));
@@ -199,23 +195,23 @@ void server__init() {
                     }
                     fflush(stdout);
                 } else if (fd == STDIN) {
-                    // handle data from standard input
+                    // standard input data
                     char * command = (char * ) malloc(sizeof(char) * MSIZEBACK);
                     memset(command, '\0', MSIZEBACK);
-                    if (fgets(command, MSIZEBACK - 1, stdin) == NULL) { // -1 because of new line
+                    if (fgets(command, MSIZEBACK - 1, stdin) == NULL) { 
                     } else {
                         execute_command_server(command, fd);
                     }
                     fflush(stdout);
                 } else {
-                    // handle data from a client
+                    // client data 
                     data_buffer_bytes = recv(fd, data_buffer, sizeof data_buffer, 0);
                     if (data_buffer_bytes == 0) {
-                        close(fd); // Close the connection
-                        FD_CLR(fd, & master); // Remove the fd from master set
+                        close(fd); // Close
+                        FD_CLR(fd, & master); // fd removed from list
                     } else if (data_buffer_bytes == -1) {
-                        close(fd); // Close the connection
-                        FD_CLR(fd, & master); // Remove the fd from master set
+                        close(fd); // Close
+                        FD_CLR(fd, & master); // fd removed from list
                     } else {
                         execute_command_server(data_buffer, fd);
                     }
@@ -226,5 +222,142 @@ void server__init() {
     }
     return;
 }
+
+// get the IP v6 or v4
+void * host__get_in_addr(struct sockaddr * sa) {
+    if (sa -> sa_family == AF_INET) {
+        return &(((struct sockaddr_in * ) sa) -> sin_addr);
+    }
+    return &(((struct sockaddr_in6 * ) sa) -> sin6_addr);
+}
+
+// executing the commands
+void s_exec_command(char command[], int requesting_client_fd) {
+    if (strstr(command, "LIST") != NULL) {
+        h_list();
+    } else if (strstr(command, "STATISTICS") != NULL) {
+        s_stats();
+    } else if (strstr(command, "BLOCKED") != NULL) {
+        char client_ip[MSIZE];
+        sscanf(command, "BLOCKED %s", client_ip);
+        s_blocked(client_ip);
+    } else if (strstr(command, "LOGIN") != NULL) {
+        char client_hostname[MSIZE], client_port[MSIZE], client_ip[MSIZE];
+        sscanf(command, "LOGIN %s %s %s", client_ip, client_port, client_hostname);
+        h_login(client_ip, client_port, client_hostname, requesting_client_fd);
+    } else if (strstr(command, "BROADCAST") != NULL) {
+        char message[MSIZEBACK];
+        int cmdi = 10;
+        int msgi = 0;
+        while (command[cmdi] != '\0') {
+            message[msgi] = command[cmdi];
+            cmdi += 1;
+            msgi += 1;
+        }
+        message[msgi - 1] = '\0';
+        s_broadcast(message, requesting_client_fd);
+    } else if (strstr(command, "REFRESH") != NULL) {
+        s_refresh(requesting_client_fd);
+    } else if (strstr(command, "SEND") != NULL) {
+        char client_ip[MSIZE], message[MSIZE];
+        int cmdi = 5;
+        int ipi = 0;
+        while (command[cmdi] != ' ') {
+            client_ip[ipi] = command[cmdi];
+            cmdi += 1;
+            ipi += 1;
+        }
+        client_ip[ipi] = '\0';
+        cmdi++;
+        int msgi = 0;
+        while (command[cmdi] != '\0') {
+            message[msgi] = command[cmdi];
+            cmdi += 1;
+            msgi += 1;
+        }
+        message[msgi - 1] = '\0'; // Remove new line
+        s_send(client_ip, message, requesting_client_fd);
+    } else if (strstr(command, "UNBLOCK") != NULL) {
+        s_block_unblock(command, false, requesting_client_fd);
+    } else if (strstr(command, "BLOCK") != NULL) {
+        s_block_unblock(command, true, requesting_client_fd);
+    } else if (strstr(command, "LOGOUT") != NULL) {
+        s_logout(requesting_client_fd);
+    } else if (strstr(command, "EXIT") != NULL) {
+        s_exit(requesting_client_fd);
+    }
+    fflush(stdout);
+}
+
+// handling login from the side of server, adding in list etc
+void h_login(char client_ip[], char client_port[], char client_hostname[], int requesting_client_fd) {
+    char client_return_msg[MSIZEBACK] = "REFRESHRESPONSE FIRST\n";
+    struct host * temp = clients;
+    bool is_new = true;
+    struct host * requesting_client = malloc(sizeof(struct host));
+
+    while (temp != NULL) {
+        if (temp -> fd == requesting_client_fd) {
+            requesting_client = temp;
+            is_new = false;
+            break;
+        }
+        temp = temp -> next_host;
+    }
+
+    if (is_new) {
+        memcpy(new_client -> hostname, client_hostname, sizeof(new_client -> hostname));
+        memcpy(new_client -> port_num, client_port, sizeof(new_client -> port_num));
+        requesting_client = new_client;
+        int client_port_value = atoi(client_port);
+        if (clients == NULL) {
+            clients = malloc(sizeof(struct host));
+            clients = new_client;
+        } else if (client_port_value < atoi(clients -> port_num)) {
+            new_client -> next_host = clients;
+            clients = new_client;
+        } else {
+            struct host * temp = clients;
+            while (temp -> next_host != NULL && atoi(temp -> next_host -> port_num) < client_port_value) {
+                temp = temp -> next_host;
+            }
+            new_client -> next_host = temp -> next_host;
+            temp -> next_host = new_client;
+        }
+
+    } else {
+        requesting_client -> is_logged_in = true;
+    }
+
+    temp = clients;
+    while (temp != NULL) {
+        if (temp -> is_logged_in) {
+            char clientString[MSIZE * 4];
+            sprintf(clientString, "%s %s %s\n", temp -> ip_addr, temp -> port_num, temp -> hostname);
+            strcat(client_return_msg, clientString);
+        }
+        temp = temp -> next_host;
+    }
+
+    strcat(client_return_msg, "ENDREFRESH\n");
+    struct message * temp_message = requesting_client -> queued_messages;
+    char receive[MSIZEBACK * 3];
+
+    while (temp_message != NULL) {
+        requesting_client -> num_msg_rcv++;
+        sprintf(receive, "RECEIVE %s %s    ", temp_message -> from_client -> ip_addr, temp_message -> text);
+        strcat(client_return_msg, receive);
+
+        if (!temp_message -> is_broadcast) {
+            cse4589_print_and_log("[RELAYED:SUCCESS]\n");
+            cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", temp_message -> from_client -> ip_addr, requesting_client -> ip_addr, temp_message -> text);
+            cse4589_print_and_log("[RELAYED:END]\n");
+        }
+        temp_message = temp_message -> next_message;
+    }
+    h_send_com(requesting_client_fd, client_return_msg);
+    requesting_client -> queued_messages = temp_message;
+}
+
 
 
