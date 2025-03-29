@@ -512,4 +512,102 @@ void s_broadcast(char msg[], int requesting_client_fd) {
     h_send_com(from_client -> fd, "SUCCESSBROADCAST\n");
 }
 
+// handling block and unblock from the server side
+void s_block_unblock(char command[], bool is_a_block, int requesting_client_fd) {
+    char client_ip[MSIZE], client_port[MSIZE];;
+    if (is_a_block) {
+        sscanf(command, "BLOCK %s %s\n", client_ip, client_port);
+    } else {
+        sscanf(command, "UNBLOCK %s %s\n", client_ip, client_port);
+    }
+    struct host * temp = clients;
+    struct host * requesting_client = malloc(sizeof(struct host));
+    struct host * blocked_client = malloc(sizeof(struct host));
+
+    while (temp != NULL) {
+        if (temp -> fd == requesting_client_fd) {
+            requesting_client = temp;
+        }
+        if (strstr(client_ip, temp -> ip_addr) != NULL) {
+            blocked_client = temp;
+        }
+        temp = temp -> next_host;
+    }
+
+    if (blocked_client != NULL) {
+        if (is_a_block) {
+            struct host * new_blocked_client = malloc(sizeof(struct host));
+            memcpy(new_blocked_client -> ip_addr, blocked_client -> ip_addr, sizeof(new_blocked_client -> ip_addr));
+            memcpy(new_blocked_client -> port_num, blocked_client -> port_num, sizeof(new_blocked_client -> port_num));
+            memcpy(new_blocked_client -> hostname, blocked_client -> hostname, sizeof(new_blocked_client -> hostname));
+            new_blocked_client -> fd = blocked_client -> fd;
+            new_blocked_client -> next_host = NULL;
+            int new_blocked_client_port_value = atoi(new_blocked_client -> port_num);
+            if (requesting_client -> blocked == NULL) {
+                requesting_client -> blocked = malloc(sizeof(struct host));
+                requesting_client -> blocked = new_blocked_client;
+            } else if (new_blocked_client_port_value < atoi(requesting_client -> blocked -> port_num)) {
+                new_blocked_client -> next_host = requesting_client -> blocked;
+                requesting_client -> blocked = new_blocked_client;
+            } else {
+                struct host * temp = requesting_client -> blocked;
+                while (temp -> next_host != NULL && atoi(temp -> next_host -> port_num) < new_blocked_client_port_value) {
+                    temp = temp -> next_host;
+                }
+                new_blocked_client -> next_host = temp -> next_host;
+                temp -> next_host = new_blocked_client;
+            }
+
+            h_send_com(requesting_client_fd, "SUCCESSBLOCK\n");
+        } else {
+            struct host * temp_blocked = requesting_client -> blocked;
+            if (strstr(temp_blocked -> ip_addr, blocked_client -> ip_addr) != NULL) {
+                requesting_client -> blocked = requesting_client -> blocked -> next_host;
+            } else {
+                struct host * previous = temp_blocked;
+                while (temp_blocked != NULL) {
+                    if (strstr(temp_blocked -> ip_addr, blocked_client -> ip_addr) != NULL) {
+                        previous -> next_host = temp_blocked -> next_host;
+                        break;
+                    }
+                    temp_blocked = temp_blocked -> next_host;
+                }
+            }
+            h_send_com(requesting_client_fd, "SUCCESSUNBLOCK\n");
+        }
+    } else {
+        if (is_a_block) {
+            h_send_com(requesting_client_fd, "ERRORBLOCK\n");
+        } else {
+            h_send_com(requesting_client_fd, "ERRORUNBLOCK\n");
+        }
+    }
+}
+
+// handlong the blocked command by printing all the blocked IP for the client
+void s_blocked(char blocker_ip_addr[]) {
+    struct host * temp = clients;
+    while (temp != NULL) {
+        if (strstr(blocker_ip_addr, temp -> ip_addr) != NULL) {
+            break;
+        }
+        temp = temp -> next_host;
+    }
+    if (h_valid_ip(blocker_ip_addr) && temp) {
+        cse4589_print_and_log("[BLOCKED:SUCCESS]\n");
+        struct host * temp_blocked = clients;
+        temp_blocked = temp -> blocked;
+        int id = 1;
+        while (temp_blocked != NULL) {
+            cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", id, temp_blocked -> hostname, temp_blocked -> ip_addr, atoi(temp_blocked -> port_num));
+            id = id + 1;
+            temp_blocked = temp_blocked -> next_host;
+        }
+    } else {
+        cse4589_print_and_log("[BLOCKED:ERROR]\n");
+    }
+
+    cse4589_print_and_log("[BLOCKED:END]\n");
+}
+
 

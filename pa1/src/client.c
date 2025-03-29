@@ -625,3 +625,11 @@ void c_block_unblock(char command[], bool is_a_block) {
         }
     }
 }
+
+// exit commnad for exit from the interface
+void c_exit() {
+    h_send_com(server -> fd, "EXIT");
+    cse4589_print_and_log("[EXIT:SUCCESS]\n");
+    cse4589_print_and_log("[EXIT:END]\n");
+    exit(0);
+}
