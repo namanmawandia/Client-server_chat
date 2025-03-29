@@ -34,7 +34,7 @@ int yes = 1;
 // function definitions
 /////////////////////////////////////////////////////////////////////
 
-/*** CHECK VALID IP4 ADDRESS***/
+// check ip address valid or not
 bool h_valid_ip(char ip_addr[MSIZE]) {
     struct sockaddr_in sa;
     int result = inet_pton(AF_INET, ip_addr, & (sa.sin_addr));
@@ -99,7 +99,3 @@ void h_list() {
 
     cse4589_print_and_log("[LIST:END]\n");
 }
-
-
-
-

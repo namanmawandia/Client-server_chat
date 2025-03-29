@@ -7,7 +7,6 @@
 #define MSIZEBACK 500 * 200
 #define STDIN 0
 
-
 // Structs
 struct message {
     char text[MSIZEBACK];
