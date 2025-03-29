@@ -42,7 +42,6 @@
 
 #include "../include/common.h"
 
-// #include "../include/client.h"
 
 #define min(a, b)(((a) < (b)) ? (a) : (b))
 #define MSIZE 500
@@ -99,7 +98,7 @@ void execute_command_server(char command[], int requesting_client_fd) {
     fflush(stdout);
 }
 
-/***  SERVER INITIALISATION ***/
+// starting of the server
 void server__init() {
     int listener = 0, status;
     struct addrinfo hints, * localhost_ai, * temp_ai;
@@ -159,9 +158,8 @@ void server__init() {
     char newClientIP[INET6_ADDRSTRLEN]; // ip of the new client
     int fd;
 
-    // main loop
     while (true) {
-        read_fds = master; // make a copy of master set
+        read_fds = master;
         if (select(fdmax + 1, & read_fds, NULL, NULL, NULL) == -1) {
             exit(EXIT_FAILURE);
         }
@@ -390,13 +388,6 @@ void s_send(char client_ip[], char msg[], int requesting_client_fd) {
         }
         temp = temp -> next_host;
     }
-    // if (to_client == NULL || from_client == NULL) {
-    //     // TODO: CHECK IF THIS IS REQUIRED
-    //     cse4589_print_and_log("[RELAYED:ERROR]\n");
-    //     cse4589_print_and_log("[RELAYED:END]\n");
-
-    //     return;
-    // }
 
     from_client -> num_msg_sent++;
     // if client is blocked by the server or other client
@@ -424,11 +415,7 @@ void s_send(char client_ip[], char msg[], int requesting_client_fd) {
         to_client -> num_msg_rcv++;
         sprintf(receive, "RECEIVE %s %s\n", from_client -> ip_addr, msg);
         h_send_com(to_client -> fd, receive);
-
-        // // TODO: CHECK IF THIS NEEDS TO BE SENT WHEN BLOCKED
-        // cse4589_print_and_log("[RELAYED:SUCCESS]\n");
-        // cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n", from_client -> ip_addr, to_client -> ip_addr, msg);
-        // cse4589_print_and_log("[RELAYED:END]\n");
+        
     } else {
         struct message * new_message = malloc(sizeof(struct message));
         memcpy(new_message -> text, msg, sizeof(new_message -> text));

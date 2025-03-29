@@ -26,7 +26,4 @@ void c_block_unblock(char command[], bool is_a_block);
 //exit client
 void c_exit();
 
-void c_p2p_file_transfer(char peer_ip[], char file_name[]);
-void c_recv_file_frm_peer(int peer_fd);
-
 #endif

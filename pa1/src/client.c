@@ -42,8 +42,6 @@
 
 #include "../include/common.h"
 
-// #include "../include/server.h"
-
 #define min(a, b)(((a) < (b)) ? (a) : (b))
 #define MSIZE 500
 #define MSIZEBACK 500 * 200
@@ -75,9 +73,6 @@ void c_block_unblock(char command[], bool is_a_block);
 
 //exit
 void c_exit();
-
-void c_p2p_file_transfer(char peer_ip[], char file_name[]);
-void c_recv_file_frm_peer(int peer_fd);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Function Definitions
@@ -149,7 +144,7 @@ int c_reg_list() {
     freeaddrinfo(localhost_ai);
 }
 
-/***  EXECUTE CLIENT COMMANDS ***/
+// function to execute the commands from the clients
 void c_exec_comm(char command[]) {
     if (strstr(command, "LIST") != NULL) {
         if (localhost -> is_logged_in) {
@@ -189,7 +184,7 @@ void c_exec_comm(char command[]) {
     } else if (strstr(command, "SUCCESSSEND") != NULL) {
         cse4589_print_and_log("[SEND:SUCCESS]\n");
         cse4589_print_and_log("[SEND:END]\n");
-    } else if (strstr(command, "LOGIN") != NULL) { // takes two arguments server ip and server port
+    } else if (strstr(command, "LOGIN") != NULL) { 
         char server_ip[MSIZE], server_port[MSIZE];
         int cmdi = 6;
         int ipi = 0;
@@ -207,7 +202,7 @@ void c_exec_comm(char command[]) {
             cmdi += 1;
             pi += 1;
         }
-        server_port[pi - 1] = '\0'; // REMOVE THE NEW LINE
+        server_port[pi - 1] = '\0';
         c_login(server_ip, server_port);
     } else if (strstr(command, "REFRESHRESPONSE") != NULL) {
         c_refresh_list(command);
@@ -217,15 +212,6 @@ void c_exec_comm(char command[]) {
         } else {
             cse4589_print_and_log("[REFRESH:ERROR]\n");
             cse4589_print_and_log("[REFRESH:END]\n");
-        }
-    } else if (strstr(command, "SENDFILE") != NULL) {
-        if (localhost -> is_logged_in) {
-            char peer_ip[MSIZE], file_name[MSIZE];
-            sscanf(command, "SENDFILE %s %s\n", peer_ip, file_name);
-            // c_p2p_file_transfer(peer_ip, file_name);
-        } else {
-            cse4589_print_and_log("[SENDFILE:ERROR]\n");
-            cse4589_print_and_log("[SENDFILE:END]\n");
         }
     } else if (strstr(command, "SEND") != NULL) {
         if (localhost -> is_logged_in) {
@@ -414,9 +400,8 @@ void c_login(char server_ip[], char server_port[]) {
     struct sockaddr_storage new_peer_addr; // client address
     socklen_t addrlen = sizeof new_peer_addr;
 
-    // main loop
     while (localhost -> is_logged_in) {
-        read_fds = master; // make a copy of master set
+        read_fds = master; 
         if (select(fdmax + 1, & read_fds, NULL, NULL, NULL) == -1) {
             exit(EXIT_FAILURE);
         }
@@ -442,12 +427,6 @@ void c_login(char server_ip[], char server_port[]) {
                     memset(command, '\0', MSIZEBACK);
                     if (fgets(command, MSIZEBACK - 1, stdin) != NULL) {
                         execute_command(command, STDIN);
-                    }
-                } else if (fd == localhost -> fd) {
-
-                    int new_peer_fd = accept(fd, (struct sockaddr * ) & new_peer_addr, & addrlen);
-                    if (new_peer_fd != -1) {
-                        // c_recv_file_frm_peer(new_peer_fd);
                     }
                 }
             }
