@@ -38,3 +38,16 @@ extern struct host * clients;
 extern struct host * localhost;
 extern struct host * server; 
 extern int yes;
+
+// functions
+bool h_valid_ip(char ip_addr[MSIZE]);
+void h_send_com(int fd, char msg[]);
+void h_exec_command(char command[], int requesting_client_fd);
+
+
+void h_author();
+void h_ip_address();
+void h_port();
+void h_list();
+
+#endif
