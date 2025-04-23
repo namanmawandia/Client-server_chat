@@ -64,7 +64,7 @@ void h_exec_command(char command[], int requesting_client_fd) {
 // author print
 void h_author() {
     cse4589_print_and_log("[AUTHOR:SUCCESS]\n");
-    cse4589_print_and_log("I, aveerama-namanmaw, have read and understood the course academic integrity policy.\n");
+    cse4589_print_and_log("I, have read and understood the course academic integrity policy.\n");
     cse4589_print_and_log("[AUTHOR:END]\n");
 }
 
